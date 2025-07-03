@@ -1,6 +1,7 @@
 on: [push]
 
 jobs:
+  # ---------- your existing Shipyard job ----------
   print-env-data:
     runs-on: ubuntu-latest
     name: Fetch Shipyard Vars
@@ -17,4 +18,40 @@ jobs:
           export CYPRESS_BASE_URL=${SHIPYARD_ENVIRONMENT_URL}
           export CYPRESS_BYPASS_TOKEN=${SHIPYARD_BYPASS_TOKEN}
           env | grep -e SHIPYARD -e CYPRESS
-        shell: bash
+
+  # ---------- NEW: build‑test‑docker job ----------
+  build-test-docker:
+    needs: print-env-data          # wait for Shipyard vars (optional)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ github.workspace }}
+
+    steps:
+      - name: ⬇️  Checkout code
+        uses: actions/checkout@v3
+
+      # ✨ 1. Back‑end unit tests (pytest inside a disposable container)
+      - name: 🔧 Backend tests
+        run: |
+          docker build -t backend-test -f backend/Dockerfile ./backend
+          docker run --rm backend-test poetry run pytest
+
+      # ✨ 2. Front‑end unit tests (Jest/React‑scripts)
+      - name: 🔧 Frontend tests
+        run: |
+          docker build -t frontend-test -f frontend/Dockerfile ./frontend
+          docker run --rm frontend-test npm test -- --watchAll=false
+
+      # ✨ 3. Build production images (tagged with commit SHA)
+      - name: 🐳 Build app images
+        run: docker-compose -f docker-compose.yml build
+
+      # (Optional) push to registry here …
+      # - name: 🐳 Docker Login & Push
+      #   …
+
+      # ✨ 4. Upload docker‑compose logs if the build fails (debug aid)
+      - name: 📋 Dump compose logs on failure
+        if: failure()
+        run: docker-compose -f docker-compose.yml logs
