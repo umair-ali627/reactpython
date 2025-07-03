@@ -37,7 +37,7 @@ jobs:
       # ✅ Dump logs if failure
       - name: 📋 Dump compose logs on failure
         if: failure()
-        run: docker compose -f docker compose.yml logs
+        run: docker compose -f docker-compose.yml logs
 
   deploy-to-ec2:
     needs: build-test-docker
