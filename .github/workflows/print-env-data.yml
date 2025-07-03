@@ -30,14 +30,14 @@ jobs:
 
       # ✅ Build docker-compose
       - name: 🐳 Build app images
-        run: docker-compose -f docker-compose.yml build
+        run: docker compose -f docker compose.yml build
 
       # (Optional) Add docker registry login & push here
 
       # ✅ Dump logs if failure
       - name: 📋 Dump compose logs on failure
         if: failure()
-        run: docker-compose -f docker-compose.yml logs
+        run: docker compose -f docker compose.yml logs
 
   deploy-to-ec2:
     needs: build-test-docker
@@ -58,5 +58,5 @@ jobs:
             cd ~/react-flask-starter
             git pull origin main
             docker-compose down
-            docker-compose up -d --build
+            docker compose up -d --build
           EOF
