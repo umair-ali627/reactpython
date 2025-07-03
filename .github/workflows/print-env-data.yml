@@ -1,57 +1,62 @@
-on: [push]
+name: CI/CD Pipeline to EC2
+
+on:
+  push:
+    branches:
+      - main
 
 jobs:
-  # ---------- your existing Shipyard job ----------
-  print-env-data:
-    runs-on: ubuntu-latest
-    name: Fetch Shipyard Vars
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-      - name: Integrate Shipyard
-        uses: shipyard/shipyard-action@1.0.0
-        with:
-          api-token: ${{ secrets.SHIPYARD_API_TOKEN }}
-          timeout-minutes: 10
-      - name: Print Env Data
-        run: |
-          export CYPRESS_BASE_URL=${SHIPYARD_ENVIRONMENT_URL}
-          export CYPRESS_BYPASS_TOKEN=${SHIPYARD_BYPASS_TOKEN}
-          env | grep -e SHIPYARD -e CYPRESS
-
-  # ---------- NEW: build‑test‑docker job ----------
   build-test-docker:
-    needs: print-env-data          # wait for Shipyard vars (optional)
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: ${{ github.workspace }}
 
     steps:
-      - name: ⬇️  Checkout code
+      - name: ⬇️ Checkout code
         uses: actions/checkout@v3
 
-      # ✨ 1. Back‑end unit tests (pytest inside a disposable container)
-      - name: 🔧 Backend tests
+      # ✅ Backend tests using poetry/pytest
+      - name: 🔧 Backend tests
         run: |
           docker build -t backend-test -f backend/Dockerfile ./backend
           docker run --rm backend-test poetry run pytest
 
-      # ✨ 2. Front‑end unit tests (Jest/React‑scripts)
-      - name: 🔧 Frontend tests
+      # ✅ Frontend tests using npm
+      - name: 🔧 Frontend tests
         run: |
           docker build -t frontend-test -f frontend/Dockerfile ./frontend
           docker run --rm frontend-test npm test -- --watchAll=false
 
-      # ✨ 3. Build production images (tagged with commit SHA)
+      # ✅ Build docker-compose
       - name: 🐳 Build app images
         run: docker-compose -f docker-compose.yml build
 
-      # (Optional) push to registry here …
-      # - name: 🐳 Docker Login & Push
-      #   …
+      # (Optional) Add docker registry login & push here
 
-      # ✨ 4. Upload docker‑compose logs if the build fails (debug aid)
-      - name: 📋 Dump compose logs on failure
+      # ✅ Dump logs if failure
+      - name: 📋 Dump compose logs on failure
         if: failure()
         run: docker-compose -f docker-compose.yml logs
+
+  deploy-to-ec2:
+    needs: build-test-docker
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: ⬇️ Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Set up SSH key
+        run: |
+          echo "${{ secrets.EC2_SSH_KEY }}" > key.pem
+          chmod 600 key.pem
+
+      - name: 🚀 Deploy to EC2
+        run: |
+          ssh -o StrictHostKeyChecking=no -i key.pem ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
+            cd ~/react-flask-starter
+            git pull origin main
+            docker-compose down
+            docker-compose up -d --build
+          EOF
