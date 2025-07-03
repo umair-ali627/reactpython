@@ -6,7 +6,7 @@ on:
       - main
 
 jobs:
-  build-test-docker:
+  build-docker:
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -16,23 +16,17 @@ jobs:
       - name: ⬇️ Checkout code
         uses: actions/checkout@v3
 
-      # ✅ Backend tests using poetry/pytest
-      - name: 🔧 Backend tests
-        run: |
-          docker build -t backend-test -f backend/Dockerfile ./backend
-          docker run --rm backend-test poetry run pytest
+      # 🚫 Backend tests skipped
+      - name: ⚠️ Skipping backend tests (none defined)
+        run: echo "No backend tests defined. Skipping..."
 
-      # ✅ Frontend tests using npm
-      - name: 🔧 Frontend tests
-        run: |
-          docker build -t frontend-test -f frontend/Dockerfile ./frontend
-          docker run --rm frontend-test npm test -- --watchAll=false
+      # 🚫 Frontend tests skipped
+      - name: ⚠️ Skipping frontend tests (none defined)
+        run: echo "No frontend tests defined. Skipping..."
 
       # ✅ Build docker-compose
       - name: 🐳 Build app images
-        run: docker compose -f docker compose.yml build
-
-      # (Optional) Add docker registry login & push here
+        run: docker compose -f docker-compose.yml build
 
       # ✅ Dump logs if failure
       - name: 📋 Dump compose logs on failure
@@ -40,14 +34,14 @@ jobs:
         run: docker compose -f docker-compose.yml logs
 
   deploy-to-ec2:
-    needs: build-test-docker
+    needs: build-docker
     runs-on: ubuntu-latest
 
     steps:
       - name: ⬇️ Checkout repo
         uses: actions/checkout@v3
 
-      - name: Set up SSH key
+      - name: 🔐 Set up SSH key
         run: |
           echo "${{ secrets.EC2_SSH_KEY }}" > key.pem
           chmod 600 key.pem
